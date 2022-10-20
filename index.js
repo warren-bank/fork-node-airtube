@@ -15,7 +15,7 @@ const bonjour = require('bonjour')();
 program
     .version(version)
     .usage('<url> [options]')
-    // .option('-v, --verbose', 'enable verbose mode') // TODO verbose output
+    .option('-v, --verbose', 'enable verbose mode')
     .option('-d, --device <device>', 'hostname or IP')
     .option('-p, --port <port>', 'port number', 7000)
     .parse(process.argv);
@@ -28,7 +28,7 @@ if (!url) {
 let logGetInfo = ora({
     text: 'Loading video info...',
     spinner: 'dots2',
-    color: 'blue',
+    color: 'yellow',
     interval: 100
 });
 
@@ -40,10 +40,36 @@ let logConnecting = ora({
 });
 
 let logPlay = ora({
-    spinner: 'dots',
-    color: 'green',
-    interval: 200
+    text: 'Playing YouTube video...',
+    spinner: 'dots2',
+    color: 'yellow',
+    interval: 100
 });
+
+const logVerboseCommand = (text) => {
+    if (program.verbose && text) {
+        console.log(chalk.green(text))
+    }
+}
+
+const logVerboseOutput = (text) => {
+    if (program.verbose && text) {
+        if (typeof text === 'object') {
+            text = JSON.stringify(text, null, 4)
+        }
+        console.log(chalk.yellow(text))
+    }
+}
+
+const logSuccess = (logger, text) => {
+    logger.succeed(text)
+    logVerboseOutput('Success: ' + text)
+}
+
+const logFailure = (logger, text) => {
+    logger.fail(text)
+    logVerboseOutput('Failure: ' + text)
+}
 
 logGetInfo.start();
 
@@ -56,45 +82,63 @@ ytdl
     .catch(err => {
         if (err) {
             console.error('\n' + chalk.red('Error'), err.message);
-            // TODO Show stack in verbose
+            logVerboseOutput(err.stack)
         }
-        process.exit(-1);
-    });
+        return(-1);
+    })
+    .then(process.exit);
 
 
 function chooseFormat(info) {
     return new Promise((resolve, reject) => {
-            if (!info || !info.formats) {
-                logGetInfo.fail('Cannot get video info.');
-                reject();
-                return;
-            }
-
-            const format = ytdl.chooseFormat(info.formats, {
-                filter: 'video' // TODO different qualities
-            });
-
-            if (!format || !format.url) {
-                logGetInfo.fail('Cannot find proper source.');
-                reject();
-                return;
-            }
-
-            const url = format.url;
-            const title = info.title;
-            logGetInfo.succeed(`Video info loaded. Using ${format.resolution}.`);
-            resolve({url, title});
+        if (!info || !info.formats) {
+            logFailure(logGetInfo, 'Cannot get video info.');
+            reject();
+            return;
         }
-    );
+
+        const format = ytdl.chooseFormat(info.formats, {
+            filter: 'video' // TODO different qualities
+        });
+
+        if (!format || !format.url) {
+            logFailure(logGetInfo, 'Cannot find proper source.');
+            reject();
+            return;
+        }
+
+        logSuccess(logGetInfo, `Video info loaded. Using ${chalk.blue(format.qualityLabel)}.`);
+        resolve(format);
+    })
+    .then(format => {
+        if (program.verbose) {
+            logVerboseCommand(`ytdl.getInfo("${url}")`)
+            logVerboseOutput(info)
+
+            logVerboseCommand(`ytdl.chooseFormat(formats, {filter: 'video'})`)
+            logVerboseOutput(format)
+        }
+        return format;
+    })
+    .then(format => {
+        const videoInfo = {
+            title: info.videoDetails.title,
+            url:   format.url
+        }
+        return videoInfo
+    });
 }
 
-// TODO logging for device discovering
 function findDevice(videoInfo) {
     return new Promise((resolve, reject) => {
         if (program.device) {
             resolve({deviceHost: program.device, devicePort: program.port, videoInfo});
         } else {
             const browser = bonjour.find({type: 'airplay'}, devices => {
+                if (program.verbose) {
+                    logVerboseCommand(`bonjour.find({type: 'airplay'})`)
+                    logVerboseOutput(devices)
+                }
                 browser.stop();
                 resolve({deviceHost: devices.host, devicePort: devices.port, videoInfo});
             });
@@ -109,7 +153,7 @@ function playVideo({deviceHost, devicePort, videoInfo}) {
         const airplayDevice = new AirPlay(deviceHost, devicePort);
 
         if (!airplayDevice) {
-            logConnecting.fail('AirPlay device connection error.');
+            logFailure(logConnecting, 'AirPlay device connection error.');
             reject();
             return;
         }
@@ -117,14 +161,18 @@ function playVideo({deviceHost, devicePort, videoInfo}) {
         //TODO airplayDevice.on error
         airplayDevice.play(videoInfo.url, function (err) {
             if (err) {
-                logConnecting.fail('AirPlay playback error.');
+                logFailure(logConnecting, 'AirPlay playback error.');
                 reject(err);
                 return;
             }
 
-            logConnecting.succeed(`Connected to ${chalk.blue(deviceHost + ':' + devicePort)}`);
-            logPlay.text = `Playing "${chalk.green(videoInfo.title)}". Press ${chalk.yellow('Ctrl+C')} to stop.`;
+            logSuccess(logConnecting, `Connected to ${chalk.blue(deviceHost + ':' + devicePort)}`);
+            if (videoInfo.title) {
+                logPlay.text = `Playing "${chalk.blue(videoInfo.title)}"...`;
+            }
             logPlay.start();
+            logSuccess(logPlay, logPlay.text);
+            resolve(0);
         })
     });
 }

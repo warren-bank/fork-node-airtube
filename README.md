@@ -22,6 +22,7 @@ airtube <url> [options]
 ```
     -h, --help             output usage information
     -V, --version          output the version number
+    -v, --verbose          enable verbose mode
     -d, --device <device>  hostname or IP
     -p, --port <port>      port number
 ```
