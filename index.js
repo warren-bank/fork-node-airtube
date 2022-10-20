@@ -130,9 +130,19 @@ function chooseFormat(info) {
         return format;
     })
     .then(format => {
+        const hash = '#video.' + (
+          (format.isHLS)
+            ? 'm3u8'
+            : (format.isDashMPD)
+              ? 'mpd'
+              : (format.container)
+                ? format.container
+                : 'mp4'
+        )
+
         const videoInfo = {
             title: info.videoDetails.title,
-            url:   format.url
+            url:   (format.url + hash)
         }
         return videoInfo
     });
