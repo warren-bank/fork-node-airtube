@@ -92,21 +92,21 @@ function chooseFormat(info) {
 function findDevice(videoInfo) {
     return new Promise((resolve, reject) => {
         if (program.device) {
-            resolve({deviceHost: program.device, videoInfo});
+            resolve({deviceHost: program.device, devicePort: program.port, videoInfo});
         } else {
             const browser = bonjour.find({type: 'airplay'}, devices => {
                 browser.stop();
-                resolve({deviceHost: devices.host, videoInfo});
+                resolve({deviceHost: devices.host, devicePort: devices.port, videoInfo});
             });
         }
     });
 }
 
-function playVideo({deviceHost, videoInfo}) {
+function playVideo({deviceHost, devicePort, videoInfo}) {
     return new Promise((resolve, reject) => {
         logConnecting.start();
 
-        const airplayDevice = new AirPlay(deviceHost, program.port);
+        const airplayDevice = new AirPlay(deviceHost, devicePort);
 
         if (!airplayDevice) {
             logConnecting.fail('AirPlay device connection error.');
@@ -122,7 +122,7 @@ function playVideo({deviceHost, videoInfo}) {
                 return;
             }
 
-            logConnecting.succeed(`Connected to ${chalk.blue(deviceHost + ':' + program.port)}`);
+            logConnecting.succeed(`Connected to ${chalk.blue(deviceHost + ':' + devicePort)}`);
             logPlay.text = `Playing "${chalk.green(videoInfo.title)}". Press ${chalk.yellow('Ctrl+C')} to stop.`;
             logPlay.start();
         })

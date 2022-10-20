@@ -1,14 +1,18 @@
 ## Command line tool to play YouTube videos on your Apple TV
-**Tested with Apple TV gen 4**
+
+Tested with:
+* Apple TV gen 4
+* [ExoAirPlayer](https://github.com/warren-bank/Android-ExoPlayer-AirPlay-Receiver)
 
 ### Install
 ```
-npm i airtube -g
+npm i @warren-bank/airtube -g
 ```
 or
 ```
-yarn global add airtube
+yarn global add @warren-bank/airtube
 ```
+
 ### Usage
 ```
 airtube <url> [options]
