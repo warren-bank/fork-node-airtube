@@ -11,13 +11,15 @@ const AirPlay = require('airplay-protocol');
 const ora = require('ora');
 const chalk = require('chalk');
 const bonjour = require('bonjour')();
+const prompt = require('./lib/AirPlay_devices').prompt;
 
 program
     .version(version)
     .usage('<url> [options]')
     .option('-v, --verbose', 'enable verbose mode')
+    .option('-t, --timeout <seconds>', 'timeout for bonjour discovery', parseInt, 0)
     .option('-d, --device <device>', 'hostname or IP')
-    .option('-p, --port <port>', 'port number', 7000)
+    .option('-p, --port <port>', 'port number', parseInt, 7000)
     .parse(process.argv);
 
 const url = program.args[0]; //TODO pattern to check youtube link
@@ -27,6 +29,13 @@ if (!url) {
 
 let logGetInfo = ora({
     text: 'Loading video info...',
+    spinner: 'dots2',
+    color: 'yellow',
+    interval: 100
+});
+
+let logDiscovering = ora({
+    text: 'Discovering AirPlay devices...',
     spinner: 'dots2',
     color: 'yellow',
     interval: 100
@@ -134,14 +143,47 @@ function findDevice(videoInfo) {
         if (program.device) {
             resolve({deviceHost: program.device, devicePort: program.port, videoInfo});
         } else {
-            const browser = bonjour.find({type: 'airplay'}, devices => {
+            const devices = []
+            let timer = 0
+
+            logDiscovering.start();
+
+            const browser = bonjour.find({type: 'airplay'}, device => {
                 if (program.verbose) {
                     logVerboseCommand(`bonjour.find({type: 'airplay'})`)
-                    logVerboseOutput(devices)
+                    logVerboseOutput(device)
                 }
-                browser.stop();
-                resolve({deviceHost: devices.host, devicePort: devices.port, videoInfo});
+                if (timer === 0) {
+                    browser.stop();
+                    resolve({deviceHost: device.host, devicePort: device.port, videoInfo});
+                }
+                else {
+                    devices.push(device)
+                }
             });
+
+            if (program.timeout > 0) {
+                timer = setTimeout(
+                    () => {
+                        browser.stop();
+
+                        if (devices.length === 0) {
+                            logFailure(logDiscovering, 'Unable to discover any AirPlay devices.');
+                            reject();
+                            return;
+                        }
+
+                        logSuccess(logDiscovering, `Discovered ${chalk.blue(devices.length)} AirPlay device${(devices.length === 1) ? '' : 's'}.`);
+
+                        // prompt user to choose 1 of several AirPlay devices found on the LAN
+                        const cb = (device) => {
+                            resolve({deviceHost: device.host, devicePort: device.port, videoInfo});
+                        }
+                        prompt(devices, cb)
+                    },
+                    (program.timeout * 1000)
+                )
+            }
         }
     });
 }
